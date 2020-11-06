@@ -1,0 +1,206 @@
+Hive Queries used for P1 
+
+--- QUESTION 1 --- 
+
+CREATE DATABASE PAGEVIEW_DB;
+
+USE PAGEVIEW_DB;
+
+CREATE TABLE OCT_PAGEVIEWS (DOMAIN_CODE STRING, PAGE_TITLE STRING, NUM_OF_REQUESTS INT, RESPONSE_BYTES INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ' ';
+
+CREATE TABLE EN_PAGEVIEWS (PAGE_TITLE STRING, NUM_OF_REQUESTS INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ' '; 	
+
+LOAD DATA LOCAL INPATH '/home/aliang30/pageviews-20201020/*' INTO TABLE OCT_PAGEVIEWS; 
+
+INSERT INTO EN_PAGEVIEWS (SELECT PAGE_TITLE, NUM_OF_REQUESTS FROM OCT_PAGEVIEWS WHERE DOMAIN_CODE='en'); 
+
+INSERT INTO EN_PAGEVIEWS (SELECT PAGE_TITLE, NUM_OF_REQUESTS  FROM OCT_PAGEVIEWS WHERE DOMAIN_CODE='en.m'); 
+
+SELECT PAGE_TITLE, SUM (NUM_OF_REQUESTS) AS num_of_page_views FROM EN_PAGEVIEWS GROUP BY PAGE_TITLE ORDER BY SUM(NUM_OF_REQUESTS) DESC LIMIT 10; 
+
+
+--- QUESTION 2 ---
+
+CREATE DATABASE CLICKSTREAM_DB;
+
+USE CLICKSTREAM_DB;
+
+CREATE TABLE CS_TABLE (PREV STRING, CURR STRING, TYPE STRING, NUM_OF_CLICK_THROUGHS INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+
+CREATE TABLE INTERNAL_DATA (PREV STRING, CURR STRING, TYPE STRING, NUM_OF_CLICK_THROUGHS INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+
+LOAD DATA LOCAL INPATH '/home/aliang30/clickstream-enwiki-2020-09.tsv' INTO TABLE CS_TABLE;
+
+INSERT INTO INTERNAL_DATA (SELECT CURR, NUM_OF_CLICK_THROUGHS FROM CS_TABLE WHERE TYPE='link'); 
+
+CREATE TABLE UPDATED_INTERNAL_DATA (PREV STRING, NUM_OF_CLICK_THROUGHS INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+
+INSERT INTO UPDATED_INTERNAL_DATA (SELECT PREV, SUM ( NUM_OF_CLICK_THROUGHS) AS NUM_OF_INTERNAL FROM EN_PAGEVIEWS GROUP BY PAGE_TITLE); 
+
+CREATE TABLE SEPT_PAGEVIEWS (DOMAIN_CODE STRING, PAGE_TITLE STRING, NUM_OF_REQUESTS INT, RESPONSE_BYTES INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ' ';
+
+CREATE TABLE EN_PAGEVIEWS (PAGE_TITLE STRING, NUM_OF_REQUESTS INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ' ';
+
+LOAD DATA LOCAL INPATH '/home/aliang30/pageviews-20200920/*' INTO TABLE SEPT_PAGEVIEWS;
+
+INSERT INTO EN_PAGEVIEWS (SELECT PAGE_TITLE, NUM_OF_REQUESTS FROM SEPT_PAGEVIEWS WHERE DOMAIN_CODE='en');
+
+INSERT INTO EN_PAGEVIEWS (SELECT PAGE_TITLE, NUM_OF_REQUESTS FROM SEPT_PAGEVIEWS WHERE DOMAIN_CODE='en.m');
+
+CREATE TABLE UPDATED_EN_PAGEVIEWS (PAGE_TITLE STRING, NUM_OF_REQUESTS INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ' '; 	
+
+INSERT INTO UPDATED_EN_PAGEVIEWS (SELECT PAGE_TITLE, SUM (NUM_OF_REQUESTS) AS NUM_OF_PAGE_VIEWS FROM EN_PAGEVIEWS GROUP BY PAGE_TITLE); 
+
+CREATE TABLE Q2_RESULT AS 
+SELECT UPDATED_EN_PAGEVIEWS.PAGE_TITLE, UPDATED_EN_PAGEVIEWS.NUM_OF_PAGE_VIEWS , UPDATED_INTERNAL_DATA.NUM_OF_INTERNAL 	
+FROM UPDATED_EN_PAGEVIEWS
+INNER JOIN UPDATED_INTERNAL_DATA. ON UPDATED_EN_PAGEVIEWS.PAGE_TITLE = UPDATED_INTERNAL_DATA.PREV;
+
+SELECT PAGE_TITLE, NUM_OF_PAGE_VIEWS, NUM_OF_INTERNAL,  
+CAST(NUM_OF_INTERNAL * 100.0 / NUM_OF_PAGE_VIEWS AS DECIMAL) AS PERCENTAGE_OF_READERS_FOLLOW_A_LINK
+FROM Q2_RESULT
+ORDER BY PERCENTAGE_OF_READERS_FOLLOW_A_LINK DESC 
+LIMIT 10;
+
+
+--- QUESTION 3 ---
+
+CREATE TABLE INTERNAL_DATA2 (PREV STRING,  CURR STRING, NUM_OF_CLICK_THROUGHS INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+
+INSERT INTO INTERNAL_DATA2 
+SELECT PREV, CURR, NUM_OF_CLICK_THROUGHS FROM CS_TABLE  
+WHERE PREV = “Hotel_California” AND
+TYPE = “link”
+ORDER BY PREV DESC;
+
+CREATE TABLE Q3_RESULTS (PREV STRING,  CURR STRING, NUM_OF_CLICK_THROUGHS INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+
+INSERT INTO Q3_RESULTS (SELECT PREV, CURR, SUM (NUM_OF_CLICK_THROUGHS) AS NUM_OF_INTERNAL 
+FROM INTERNAL_DATA2 GROUP BY CURR); 
+
+
+SELECT * FROM Q3_RESULTS ORDER BY NUM_OF_INTERNAL LIMIT 10;
+
+
+--- Question 5 ---
+Analyze how many users will see the average vandalized Wikipedia page before the offending edit is reversed.
+
+CREATE TABLE DUMP_DATA (
+	wiki_db string, 
+	event_entity string, 
+	event_type string, 
+	event_timestamp	string, 
+	event_comment string, 
+	event_user_id bigint, 
+	event_user_text_historical string, 
+	event_user_text string, 
+	event_user_blocks_historical array<string>, 
+	event_user_blocks array<string>, 
+	event_user_groups_historical array<string>, 
+	event_user_groups array<string>, 
+	event_user_is_bot_by_historical array<string>, 
+	event_user_is_bot_by array<string>,
+	event_user_is_created_by_self boolean,
+	event_user_is_created_by_system	boolean,
+	event_user_is_created_by_peer boolean,
+	event_user_is_anonymous	boolean,
+	event_user_registration_timestamp string,
+	event_user_creation_timestamp string,
+	event_user_first_edit_timestamp	string,
+	event_user_revision_count bigint,
+	event_user_seconds_since_previous_revision bigint,
+	page_id	bigint,
+	page_title_historical string,
+	page_title string,
+	page_namespace_historical int,
+	page_namespace_is_content_historical boolean,
+	page_namespace int,
+	page_namespace_is_content boolean,
+	page_is_redirect boolean,
+	page_is_deleted	boolean,
+	page_creation_timestamp	string,
+	page_first_edit_timestamp string,
+	page_revision_count bigint,
+	page_seconds_since_previous_revision bigint,
+	user_id	bigint,
+	user_text_historical string,
+	user_text string,
+	user_blocks_historical array<string>,
+	user_blocks array<string>,
+	user_groups_historical array<string>,
+	user_groups array<string>,
+	user_is_bot_by_historical array<string>,
+	user_is_bot_by array<string>,
+	user_is_created_by_self	boolean,
+	user_is_created_by_system boolean,
+	user_is_created_by_peer	boolean,
+	user_is_anonymous boolean,
+	user_registration_timestamp string,
+	user_creation_timestamp	string,
+	user_first_edit_timestamp string,
+	revision_id bigint,
+	revision_parent_id bigint,
+	revision_minor_edit boolean,
+	revision_deleted_parts array<string>,
+	revision_deleted_parts_are_suppressed boolean,
+	revision_text_bytes bigint,
+	revision_text_bytes_diff bigint,
+	revision_text_sha1 string,
+	revision_content_model string,
+	revision_content_format string,
+	revision_is_deleted_by_page_deletion boolean,
+	revision_deleted_by_page_deletion_timestamp string,
+	revision_is_identity_reverted boolean,
+	revision_first_identity_reverting_revision_id bigint,
+	revision_seconds_to_identity_revert bigint,
+	revision_is_identity_revert boolean,
+	revision_is_from_before_page_creation boolean,
+	revision_tags array<string>
+) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+
+
+CREATE TABLE FILTERED_DATA (PAGE_TITLE STRING, revision_seconds_to_identity_revert BIGINT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+
+
+INSERT INTO FILTERED_DATA (SELECT PAGE_TITLE, revision_seconds_to_identity_revert FROM DUMP_DATA WHERE EVENT_ENTITY='revision' AND revision_seconds_to_identity_revert > 0.0);
+
+
+CREATE TABLE UPDATED_FILTERED_DATA (PAGE_TITLE STRING, revision_seconds_to_identity_revert BIGINT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';	
+
+
+INSERT INTO UPDATED_FILTERED_DATA (SELECT PAGE_TITLE, SUM (revision_seconds_to_identity_revert) FROM FILTERED_DATA GROUP BY PAGE_TITLE); 
+
+
+CREATE TABLE Q5_RESULTS AS 
+SELECT UPDATED_EN_PAGEVIEWS.PAGE_TITLE, UPDATED_EN_PAGEVIEWS.NUM_OF_PAGE_VIEWS, UPDATED_FILTERED_DATA.revision_seconds_to_identity_revert	
+FROM UPDATED_EN_PAGEVIEWS
+INNER JOIN UPDATED_FILTERED_DATA ON UPDATED_EN_PAGEVIEWS.PAGE_TITLE = UPDATED_FILTERED_DATA.PAGE_TITLE;
+
+
+SELECT SUM(NUM_OF_PAGE_VIEWS) / COUNT(PAGE_TITLE) FROM Q5_RESULTS;
+
+
+--- Question 6 ---
+What is the total number of English articles visited on 10/20/2020 with titles that start with the letter ‘a’?
+
+USE PAGEVIEW_DB;
+
+CREATE TABLE OCT_PAGEVIEWS (DOMAIN_CODE STRING, PAGE_TITLE STRING, NUM_OF_REQUESTS INT, RESPONSE_BYTES INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ' ';
+
+CREATE TABLE EN_PAGEVIEWS (PAGE_TITLE STRING, NUM_OF_REQUESTS INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ' '; 
+
+LOAD DATA LOCAL INPATH '/home/aliang30/pageviews-20201020/*' INTO TABLE OCT_PAGEVIEWS; 
+
+INSERT INTO EN_PAGEVIEWS (SELECT PAGE_TITLE, NUM_OF_REQUESTS FROM OCT_PAGEVIEWS WHERE DOMAIN_CODE='en'); 
+
+INSERT INTO EN_PAGEVIEWS (SELECT PAGE_TITLE, NUM_OF_REQUESTS  FROM OCT_PAGEVIEWS WHERE DOMAIN_CODE='en.m'); 
+
+SELECT COUNT(*) AS total_a
+FROM EN_PAGEVIEWS 
+WHERE PAGE_TITLE LIKE 'A%';
+
+
+
+
+
+
